@@ -25,10 +25,12 @@
 
 ### ASCII ART - Node Relationships
 ```
-()--()              (p:Person {name:})--(m:Movie)                                                       // 2 nodes have some type of relationship
-()-->()             (p:Person)-[rel:ACTED_IN]->(m:Movie {title:'The Matrix'})                           // the first node has a relationship to the second node
-()<--()             (m:Movie {title:'The Matrix'})<-[rel:ACTED_IN]-(p:Person)                           // the second node has a relationship to the first node
-()-[]->()-[]->()    (p:Person)-[:FOLLOWS]->(:Person)-[:FOLLOWS]->(:Person {name:'Jessica Thompson'})    // traversing multiple relationships
+()--()                      (p:Person {name:})--(m:Movie)                                                       // 2 nodes have some type of relationship
+()-->()                     (p:Person)-[rel:ACTED_IN]->(m:Movie {title:'The Matrix'})                           // the first node has a relationship to the second node
+()<--()                     (m:Movie {title:'The Matrix'})<-[rel:ACTED_IN]-(p:Person)                           // the second node has a relationship to the first node
+()-[]->()-[]->()            (p:Person)-[:FOLLOWS]->(:Person)-[:FOLLOWS]->(:Person {name:'Jessica Thompson'})    // traversing multiple relationships
+()-[:rel*n]-()              (follower:Person)-[:FOLLOWS*2]->(p:Person)                                          // traversing multiple times
+()-[:rel*lower..upper]-()   (follower:Person)-[:FOLLOWS*1..3]->(p:Person)                                       // traversing paths of length lower-upper (ex 1-3)
 ```
 
 ## Commands
@@ -42,6 +44,15 @@
         * Finds all the People *p* that either acted in or directed a Movie *m*
     * Ex: ` MATCH (a:Person)-[:ACTED_IN]->(m:Movie)<-[:DIRECTED]-(d:Person) `
         * Finds the Actors *a* and Directors *d* for each Movie *m*
+* **OPTIONAL MATCH**
+   * `MATCH` but if it fails it returns `null`
+   * Ex: 
+        ```
+        MATCH (p:Person)
+        WHERE p.name STARTS WITH 'James'
+        OPTIONAL MATCH (p)-[r:REVIEWED]->(m:Movie)
+        ```
+        * Finds all the Person *p* named 'James' then checks what Movie *m* they have reviewed *r*, if they have not reviewed any movies *r* will be `null`
 * **WHERE**
     *  Modification of `MATCH` for testing equality, multiple values, ranges, labels, existence of a property, string values, regular expressions, patterns in the graph, inclusion in a list
         * `WHERE` can do everthing `MATCH` can plus more
@@ -79,6 +90,12 @@
         * Finds all the Person *p* which were born in any year given in the list
     * List 2 Ex: ` MATCH (p:Person)-[r:ACTED_IN]->(m:Movie) WHERE 'Neo' IN r.roles AND m.title='The Matrix' ` 
         * Checks if 'Neo' is in the `r`'s list property `roles` and if 
+    * Ex: 
+        ```
+        MATCH (follower:Person)-[:FOLLOWS]->(reviewer:Person)-[:REVIEWED]->(m:Movie)
+        WHERE m.title = 'The Replacements'
+        ```
+        * Finds all the Person *follower* of Person *reviewer* which reviewed the Movie *m* titled 'The Replacements' by traversing the relationships
 * **RETURN** 
     * Returns whatever its given
     * Ex: ` MATCH (m:Movie) RETURN m `
@@ -96,6 +113,9 @@
         * Returns the type of relationship given
         * Ex: ` MATCH (p:Person)-[r]->(m:Movie) RETURN p.name, type(r), m.title ` 
             * type(r) returns the relationship *p* has with *m*
+    * **shortestPath()** 
+        * Returns the path with the least relationship traversals that satisfies the condition
+        * Ex: ` MATCH path = shortestPath((m1:Movie {title:'A Few Good Men'})-[*]-(m2:Movie {title:'The Matrix'})) `
 * String
     * **toLower()** & **toUpper()** 
         * Returns all lower-case / upper-case version of given string
@@ -112,7 +132,10 @@
     * Single Path Ex:   ` path = (:Person)-[:FOLLOWS]->(:Person)-[:FOLLOWS]->(:Person {name:'Jessica Thompson'}) `
     * Multiple Path Ex: ` path = (:Person)-[:ACTED_IN]->(:Movie)<-[:DIRECTED]-(:Person {name:'Ron Howard'}) `
 * inline comment -> //
-* Conditionals can use the boolean operators `AND`, `OR`, `XOR`, and `NOT`
+* Uses Python range syntax -> start..end
+* Conditionals (`WHERE`, etc.) can use the boolean operators `AND`, `OR`, `XOR`, and `NOT`
+* Can use commas to seperate multiple of a command 
+    * Ex: ` MATCH (a:Person)-[:ACTED_IN]->(m:Movie), (m)<-[:DIRECTED]-(d:Person) `
 
 ## Cypher Conventions
 * Node labels are CamelCase 
