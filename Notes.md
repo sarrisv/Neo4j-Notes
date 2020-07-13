@@ -33,16 +33,57 @@
 ()-[:rel*lower..upper]-()   (follower:Person)-[:FOLLOWS*1..3]->(p:Person)                                       // traversing paths of length lower-upper (ex 1-3)
 ```
 
-## Commands
+## Graph Creation/Modification
+* Commands
+   * **CREATE**
+      * Adds a new object to the graph
+      * Node Ex: ` CREATE (:Person {name:'Tom Hanks'}) ` 
+         * Creates node with *Person* label and *name* property
+      * Relationship Ex: ` MATCH (p:Person {name:'Tom Hanks'}), (m:Movie {name:'The Matrix'})  CREATE (p)-[:LOVES]->(m)`
+         * Person *p* named 'Tom Hanks' now has a *LOVES* relationship with Movie *m* 'The Matrix'
+            * Relationships created using `CREATE` *must* have a direction
+      * Relationships with Properties Ex: 
+         ```
+         MATCH (a:Person), (m:Movie)
+         WHERE a.name = 'Katie Holmes' AND m.title = 'Batman Begins'
+         CREATE (a)-[rel:ACTED_IN {roles: ['Rachel','Rachel Dawes']}->(m)
+         ```
+      * Node + Relationship Ex: 
+         ```
+         MATCH (m:Movie {name:'Batman Begins'}) 
+         CREATE (p:Person {name:'Gary Oldman', born:1958})-[:ACTED_IN {role:['James Gorden','Commish']}]->(m)` 
+         ```
+         * Created a Person *p* named 'Gary Oldman', born in 1958 whose roles as an actor were 'James Gorden' and 'Commish' in Movie *m*
+   * **SET**
+      * Changes properties of an object
+      * Add Label Ex: ` MATCH (p:Person {name:'Tom Hanks'}) SET p:Actor:Director `
+         * Finds Person *p* named 'Tom Hanks' then gives it the labels *Actor* and *Director*
+            * *p* now has three labels
+      * New Property 1 Ex: ` MATCH (p:Person {name:'Tom Hanks'}) SET p.address = '123 Road', p.zipCode = 123456 `
+         * Add the properties *address* and *zipCode* to Person *p* named 'Tom Hanks'
+      * Remove Properties Ex: ` MATCH (p:Person {name:'Tom Hanks'}) SET p.born = null `
+         * Person *p* no longer has the *born* property
+      * Overwrite Properties Ex: ` MATCH (p:Person {name:'Tom Hanks'}) SET p = {name:'Matt Bomer', born:1977} `
+         * Person *p* that had the name 'Tom Hanks' now is named 'Matt Bomer' and only has two properties *name* and *born*
+      * New Properties 2 Ex: ` MATCH (p:Person {name:'Tom Hanks'}) SET p += {height:'1.8m'} `
+         * Person *p* named 'Tom Hanks' now has the additional property *height*
+   * **REMOVE**
+      * Removes obejct or property from the graph
+      * Node Ex:  ` MATCH (p:Person {name:'Tom Hanks'}) REMOVE p `
+         * Removes Person *p* named 'Tom Hanks' from the graph
+      * Property Ex: ` MATCH (p:Person {name:'Tom Hanks'})-[r:ACTED_IN]-(:Movie) REMOVE p.born, r.roles `
+         * Removes Person *p*'s born property and the all of *p*'s *roles* in movies which they acted in
+
+## Query Commands
 * **MATCH**
     * Finds all nodes that match given pattern
-    * Ex: ` MATCH (p:Person) `
+    * Node Type Ex: ` MATCH (p:Person) `
         * Finds all the nodes with label *Person*
-    * Ex: ` MATCH (p:Person {born: 1970}) `
+    * Property Ex: ` MATCH (p:Person {born: 1970}) `
         * Finds all the *Person* nodes with the property *born: 1970*
-    * Ex: ` Match (p:Person)-[:ACTED_IN|:DIRECTED]->(m:Movie) `
+    * Relationship Ex: ` Match (p:Person)-[:ACTED_IN|:DIRECTED]->(m:Movie) `
         * Finds all the People *p* that either acted in or directed a Movie *m*
-    * Ex: ` MATCH (a:Person)-[:ACTED_IN]->(m:Movie)<-[:DIRECTED]-(d:Person) `
+    * Multiple Relationship Ex: ` MATCH (a:Person)-[:ACTED_IN]->(m:Movie)<-[:DIRECTED]-(d:Person) `
         * Finds the Actors *a* and Directors *d* for each Movie *m*
 * **OPTIONAL MATCH**
    * `MATCH` but if it fails it returns `null`
@@ -90,7 +131,7 @@
         * Finds all the Person *p* which were born in any year given in the list
     * List 2 Ex: ` MATCH (p:Person)-[r:ACTED_IN]->(m:Movie) WHERE 'Neo' IN r.roles AND m.title='The Matrix' ` 
         * Checks if 'Neo' is in the `r`'s list property `roles` and if 
-    * Ex: 
+    * Relationship Traversal Ex: 
         ```
         MATCH (follower:Person)-[:FOLLOWS]->(reviewer:Person)-[:REVIEWED]->(m:Movie)
         WHERE m.title = 'The Replacements'
@@ -98,17 +139,39 @@
         * Finds all the Person *follower* of Person *reviewer* which reviewed the Movie *m* titled 'The Replacements' by traversing the relationships
 * **RETURN** 
     * Returns whatever its given
-    * Ex: ` MATCH (m:Movie) RETURN m `
+    * Basic Ex: ` MATCH (m:Movie) RETURN m `
         * Returns all the nodes descibed by *m*
-    * Ex: ` MATCH (m:Movie {released: 1970}) RETURN m.title, m.released `
+    * Property Ex: ` MATCH (m:Movie {released: 1970}) RETURN m.title, m.released `
         * Returns the movies released in 1970 as a table with 2 columns named after the property
-    * Ex: ` MATCH (m:Movie {released: 1970}) RETURN m.title AS Title `
+    * Alias Ex: ` MATCH (m:Movie {released: 1970}) RETURN m.title AS Title `
         * Returns the movies released in 1970 as a table with 1 column named "Title", for longer strings use backticks (\`Title\`) not apostrophes ('Title') or quotation mark ("Title")
-    * Ex: ` MATCH (p:Person {name: 'Tom Hanks'})-[r]->(m:Movie) RETURN m.title, type(r) , m.released `
+    * Relationship Ex: ` MATCH (p:Person {name: 'Tom Hanks'})-[r]->(m:Movie) RETURN m.title, type(r) , m.released `
         * Returns all the movies Tom Hanks was involved in as a table of [table, Hanks' relationship to movie, year released]
+* **DISTINCT**
+   * Eliminates duplicates in the data
+   * `RETURN` Ex: ` MATCH (p:Person {name:'Tom Hanks'})-[:DIRECTED | ACTED_IN]->(m:Movie) RETURN DISTINCT m.title, m.released `
+      * There are Movies *m* that Person *p* named 'Tom Hanks' has acted in and direceted, `DISTINCT` removes the duplicates before we `RETURN`
+   * List Ex: `MATCH (p:Person)-[:ACTED_IN | DIRECTED | WROTE]->(m:Movie {released:2003}) RETURN m.title, collect(DISTINCT p.name) `
+      * Collects all the Person *p* which acted in, directed, or wrote for a Movie *m* then returns the title and a list of the *p* involved without duplicates
+   * `WITH` Ex: `MATCH (p:Person {name:'Tom Hanks'})-[:DIRECTED | ACTED_IN]->(m:Movie) WITH DISTINCT m RETURN m.title `
+      * `WITH DISTINCT` continues the query with *m* without the duplicates for Movies *m* he both acted and directed
+* **ORDER BY** 
+   * Sorts data (default: ascending)
+   * Ex: ` MATCH (:Person {name:'Tom Hanks'})-[:ACTED_IN]->(m:Movie) RETURN m.title ORDER BY m.released `
+      * Returns Movies *m* in ascending order via the year they were released
+   * `DESC` Ex: ` MATCH (:Person {name:'Tom Hanks'})-[:ACTED_IN]->(m:Movie) RETURN m.title ORDER BY m.released DESC `
+      * Returns Movies *m* in decending order via the year they were released
+   * Ex: ` MATCH (:Person {name:'Tom Hanks'})-[:ACTED_IN]->(m:Movie) RETURN m.title ORDER BY m.released DESC, m.title `
+      * Returns Movies *m* in decending order via the year they were released but movies with the same release year are sorted in ascending order based on title
+* **LIMIT**
+   * Limits the # of table rows an expression outputs
+   * `RETURN` Ex: ` MATCH (m:Movie) RETURN m.title, m.released ORDER BY m.released LIMIT 10 `
+      * Reduces output of the `RETURN` to just the first 10 results
+   * `WITH` Ex: `MATCH (p:Person)-[:ACTED_IN]->(m:Movie) WITH m, p LIMIT 6 RETURN collect(p.name), m.title `
+      * Limits the number of Person *p* in the rest of the query to the first 6 in the table at that time
 * **IN**
     * Returns boolean of whether or not an element is in a list
-    * Ex: ` MATCH (p:Person) WHERE p.born IN [1970,1971,1972] RETURN p`
+    * Ex: ` MATCH (p:Person) WHERE p.born IN [1970,1971,1972] RETURN p `
         * Returns all Person *p* that were born in the list of years provided
 * **WITH**
     * Used to Process the results of a match before continuing a query
@@ -140,8 +203,15 @@
         RETURN m.title, m.released
         ```
         *   `CALL` performs the `MATCH (p:Person)-[:REVIEWED]->(m:Movie) RETURN  m` subquery, making *m* useable, before continuing onto the rest of the query
-        
+
 ## Functions
+* Node
+   * **labels()**
+      * Returns the labels of a given node
+      * Ex: ` MATCH (p:Person {name:'Tom Hanks'}) RETURN labels(p) `
+   * **properties()**
+      * Returns the properties of a given node
+      * Ex: ` MATCH (p:Person {name:'Tom Hanks'}) RETURN properties(p) ` 
 * Relationship
     * **type()**
         * Returns the type of relationship given
@@ -154,7 +224,7 @@
 * String
     * **toLower()** & **toUpper()** 
         * Returns all lower-case / upper-case version of given string
-        * Ex: ` MATCH (p:Person)-[:WROTE]->(:Movie) RETURN toLower(p.name)`
+        * Ex: ` MATCH (p:Person)-[:WROTE]->(:Movie) RETURN toLower(p.name) `
             * Returns the lower-case version of all the Person *p* which wrote a Movie *m*
 * Aggregating  
     * **collect()**
