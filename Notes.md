@@ -67,7 +67,7 @@
     * Label Ex: ` MATCH (p)-[:ACTED_IN]->(m) WHERE p:Person AND m:Movie AND m.title='The Matrix' `
         * Finds all the nodes *p* that acted in any node *m* then tests if *p* has the *Person* label, *m* has the *Movie* label, and that if it does is *m* titled 'The Matrix'
         * MATCH equivalent: ` MATCH (p:Person)-[:ACTED_IN]->(:Movie {title: 'The Matrix'}) `
-        * Preforms better than `MATCH` if nodes have multiple labels
+        * Performs better than `MATCH` if nodes have multiple labels
     * Existence Ex: ` MATCH (p:Person)-[:ACTED_IN]->(m:Movie) WHERE p.name='Jack Nicholson' AND exists(m.tagline) `
         * Finds all the Person *p* that acted in a Movie *m* then tests if the *p* is named 'Jack Nicholson' and *m* has a tagline
     * Strings Ex: ` MATCH (p:Person)-[:ACTED_IN]->() WHERE p.name STARTS WITH 'Michael' `
@@ -106,6 +106,40 @@
         * Returns the movies released in 1970 as a table with 1 column named "Title", for longer strings use backticks (\`Title\`) not apostrophes ('Title') or quotation mark ("Title")
     * Ex: ` MATCH (p:Person {name: 'Tom Hanks'})-[r]->(m:Movie) RETURN m.title, type(r) , m.released `
         * Returns all the movies Tom Hanks was involved in as a table of [table, Hanks' relationship to movie, year released]
+* **IN**
+    * Returns boolean of whether or not an element is in a list
+    * Ex: ` MATCH (p:Person) WHERE p.born IN [1970,1971,1972] RETURN p`
+        * Returns all Person *p* that were born in the list of years provided
+* **WITH**
+    * Used to Process the results of a match before continuing a query
+    * Ex: 
+        ```
+        MATCH (a:Person)-[:ACTED_IN]->(m:Movie)
+        WITH  a, count(a) AS numMovies, collect(m.title) as movies
+        WHERE 1 < numMovies < 4
+        RETURN a.name, numMovies, movies
+        ```
+        * `WITH` processes the `MATCH` then continues the query with Person *a*, the number of movies the *a* has acted in as *numMovies*, and a list of those movies as *movies*
+            * The *numMovies* and *movies* would not be possible to create in the `MATCH` statement
+* **UNWIND**
+    * Contructs rows from a list
+    * Ex: 
+        ```
+        MATCH (m:Movie)<-[:ACTED_IN]-(p:Person)
+        WITH collect(p) AS actors, count(p) AS actorCount, m
+        UNWIND actors AS actor
+        RETURN m.title, actorCount, actor.name
+        ```
+        * `UNWIND` creates a table with each row being a node in the list *actors*
+* **CALL** 
+    * Performs a subquery which typically returns a set up nodes
+    * Ex: 
+        ```
+        CALL { MATCH (p:Person)-[:REVIEWED]->(m:Movie) RETURN  m }
+        MATCH (m) WHERE m.released=2000
+        RETURN m.title, m.released
+        ```
+        *   `CALL` performs the `MATCH (p:Person)-[:REVIEWED]->(m:Movie) RETURN  m` subquery, making *m* useable, before continuing onto the rest of the query
         
 ## Functions
 * Relationship
@@ -116,16 +150,82 @@
     * **shortestPath()** 
         * Returns the path with the least relationship traversals that satisfies the condition
         * Ex: ` MATCH path = shortestPath((m1:Movie {title:'A Few Good Men'})-[*]-(m2:Movie {title:'The Matrix'})) `
+            * path is the shortest relationship traversal between 'A Few Good Men' and 'The Matrix'
 * String
     * **toLower()** & **toUpper()** 
         * Returns all lower-case / upper-case version of given string
-        * Ex: `toLower(p.name)`
+        * Ex: ` MATCH (p:Person)-[:WROTE]->(:Movie) RETURN toLower(p.name)`
+            * Returns the lower-case version of all the Person *p* which wrote a Movie *m*
+* Aggregating  
+    * **collect()**
+        * Returns an aggregated list object of a given object
+        * Ex: ` MATCH (p:Person)-[:ACTED_IN]->(m:Movie)<-[:DIRECTED]-(p) RETURN size(collect(m)) `
+            * Returns a list of the Movie *m* which a Person *p* both acted and directed
+    * **size()**
+        * Returns the # of elements in a given list
+        * Ex: ` MATCH (p:Person)-[:ACTED_IN]->(m:Movie)<-[:DIRECTED]-(p) RETURN size(collect(m)) `
+            * Returns the # of elements in the list of provided by the collect function 
+    * **count()** 
+        * Returns # of given object type
+        * Ex: ` MATCH (p:Person)-[:ACTED_IN]->(m:Movie)<-[:DIRECTED]-(p)  RETURN count(m) `
+            * Returns the # of the Movie *m* which a Person *p* both acted and directed
+* Conversion
+    * **toInteger()**
+    * **toString()**
+* Time
+    * **date()**
+        * Returns a new Date object
+    * **time()**
+        * Returns a new Time object
+    * **datetime()**
+        * Returns a new DateTime object
+    * **timestamp()**
+        * Returns a long integer of the milliseconds since midnight, January 1, 1970 UTC
 
 ## Useful Queries
 * Get visualization of how the database stores data
     * ` CALL db.schema.visualization() `
 * List all node properties in the database
     * ` CALL db.propertykeys() `
+
+## Types
+* Property
+    * Number
+        * **Integer**
+        * **Float**
+    * **String**
+    * **Boolean**
+    * Spatial
+        * **Point**
+    * Temporal
+        * **Date**
+        * **Time**
+        * **LocalTime**
+        * **DateTime**
+        * **LocalDateTime**
+        * **Duration**
+* Structural
+    * **Node**
+        * ID
+        * Labels
+        * Properties
+    * **Relationship**
+        * ID
+        * Type
+        * Properties
+        * ID of start and end nodes
+* Composite (Data Structures)
+    * **List**
+        * Can access list elements via index
+            * list[*index*]
+    * **Map**
+        * Key -> Value
+        * Can access map elements via key
+            * map[*key*]
+        * Projections are modified versions of existing nodes 
+            * Useful for creating additional or removing properties
+            * ` MATCH (m:Movie {title:'The Matrix'}) RETURN m {.title, .released} `
+                * Creates map of *m* only containing the title and released properties
 
 ## Other
 * Can assign variables to path or multiple paths
@@ -136,6 +236,7 @@
 * Conditionals (`WHERE`, etc.) can use the boolean operators `AND`, `OR`, `XOR`, and `NOT`
 * Can use commas to seperate multiple of a command 
     * Ex: ` MATCH (a:Person)-[:ACTED_IN]->(m:Movie), (m)<-[:DIRECTED]-(d:Person) `
+* Cypher automatically groups return data based on the node type with the least # of nodes
 
 ## Cypher Conventions
 * Node labels are CamelCase 
