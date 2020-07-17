@@ -54,6 +54,14 @@
             CREATE (p:Person {name:'Gary Oldman', born:1958})-[:ACTED_IN {role:['James Gorden','Commish']}]->(m)` 
             ```
             * Created a Person *p* named 'Gary Oldman', born in 1958 whose roles as an actor were 'James Gorden' and 'Commish' in Movie *m*
+    * **MERGE**
+        * `MATCH` but if there is not match it creates the object
+        * Normal Ex: ` MERGE (p:Person {name:'Tom Hanks'}) `
+            * Creates Person node with name 'Tom Hanks' if none is found.
+        * `ON CREATE` Ex: ` MERGE (p:Person {name:'Tom Hanks'}) ON CREATE SET p.born = 'Concord' `
+            * If Person *p* named 'Tom Hanks' does not already exist create on and give it the property *born* = 'Concord'
+        * `ON MATCH` Ex: ` MERGE (p:Person {name:'Tom Hanks'}) ON MATCH SET p.born = 'Concord' `
+            * If Person *p* named 'Tom Hanks' exists give it the property *born* = 'Concord'
     * **SET**
         * Changes properties of an object
         * Add Label Ex: ` MATCH (p:Person {name:'Tom Hanks'}) SET p:Actor:Director `
@@ -79,7 +87,48 @@
         * Relationship Ex: ` MATCH (p:Person {name:'Tom Hanks'})-[r]->(:Movie) DELETE r`
             * Removes all the relationships Person *p* has with any Movie node
     * **DETATCH DELETE**
+        * Removes a node and all of its relationships from the graph
+        * Ex: ` MATCH (p:Person {name:'Tom Hanks'}) DETATCH DELETE p `
+            * Removes all the relationships of Person *p* then deletes the node
     
+## Constraints
+* Types 
+    * Uniqueness
+        * Constraint that ensures that a value for a property is unique for all nodes of that type
+    * Existence
+        * Constraint that ensures that when a node or relationship is created or modified, it must have certain properties set.
+    * Node Key
+        *  Uniqueness and Existence constraint for multiple properties of a node of a certain type
+* Create Constraints
+    * If all existing nodes achieve the constraint it is added to the graph
+    * Uniqueness Ex: ` CREATE CONSTRAINT UniqueMovieTitleConstraint ON (m:Movie) ASSERT m.title IS UNIQUE `
+    * Existence Ex: ` CREATE CONSTRAINT ExistsMovieTagline ON (m:Movie) ASSERT exists(m.tagline) `
+    * Node Key Ex: ` CREATE CONSTRAINT UniqueNameBornConstraint ON (p:Person) ASSERT (p.name, p.born) IS NODE KEY `
+* Drop Constraints
+    * Removes constraint from the graph
+    * Ex: ` DROP CONSTRAINT ExistsMovieTagline `
+
+## Indexs
+* Indexes are used to improve initial node lookup performance
+* Single-property
+    * Ex: ` CREATE INDEX MovieReleased FOR (m:Movie) ON (m.released) `
+* Composite-property
+    * Es: ` CREATE INDEX MovieReleasedVideoFormat FOR (m:Movie) ON (m.released, m.videoFormat)  `
+* Full-text Schema
+    * Node Ex: ` CALL db.index.fulltext.createNodeIndex('MovieTitlePersonName',['Movie', 'Person'], ['title', 'name']) `
+    * Relationship Ex: ` CALL db.indexfulltext.createRelationshipIndex() `
+* Use Indexes
+    * Basic Ex: ` CALL db.index.fulltext.queryNodes('MovieTitlePersonName', 'Jerry') YIELD node RETURN node`
+        * *node* returns every movie with either a title or person containing 'Jerry'
+    * Score Ex: ` CALL db.index.fulltext.queryNodes('MovieTitlePersonName', 'Matrix') YIELD node, score RETURN node.title, score `
+        * Returns all the nodes with movie titles or people with names that contain 'Matrix' but also returns a score of "closeness"
+    * Property Ex: ` CALL db.index.fulltext.queryNodes('MovieTitlePersonName', 'name: Jerry') YIELD node RETURN node `
+        * Returns nodes where the propety *name* contains 'Jerry'
+* Drop Indexes
+    * Property Index Ex: ` DROP INDEX MovieReleasedVideoFormat `
+        * Drops the property index *MovieReleasedVideoFormat*
+    * Schema Ex: ` CALL db.index.fulltext.drop('MovieTitlePersonName') `
+        * Drops the entire full-text schema *MovieTitlePersonName*
 
 ## Query Commands
 * **MATCH**
@@ -209,6 +258,14 @@
         RETURN m.title, m.released
         ```
         *   `CALL` performs the `MATCH (p:Person)-[:REVIEWED]->(m:Movie) RETURN  m` subquery, making *m* useable, before continuing onto the rest of the query
+* **EXPLAIN** 
+    * Showcases the call process of a query
+    * Ex: ` EXPLAIN MATCH (p:Person {name:'Tom Hanks'}) `
+        * Outputs a infographic of the call procedure
+* **PROFILE**
+    * Runs a query with proformance metrics
+    * Ex: ` PRPOFILE MATCH (p:Person {name:'Tom Hanks'}) `
+        * Outputs infographic of call procedure with time and memory access information
 
 ## Functions
 * Node
@@ -263,6 +320,14 @@
     * ` CALL db.schema.visualization() `
 * List all node properties in the database
     * ` CALL db.propertykeys() `
+* List all the graph's constraints
+    * ` CALL db.constraints() `
+* List all existing indexes
+    * ` CALL db.indexes() `
+* Clear all parameters
+    * ` :params {} `
+* Check on all queries being performed
+    * ` :queries ` \ ` dbms.listQueries() `
 
 ## Types
 * Property
@@ -302,6 +367,15 @@
             * Useful for creating additional or removing properties
             * ` MATCH (m:Movie {title:'The Matrix'}) RETURN m {.title, .released} `
                 * Creates map of *m* only containing the title and released properties
+
+## Best Practices
+* Parameters
+    * Create parameters via `=>`
+        * Single Ex: ` :param actorName => 'Tom Hanks' `
+        * Mutiple Ex: ` :params {actorName: 'Tom Cruise', movieName: 'Top Gun'} `
+    * Cypher is expensive to recompile, use `$` to parameterize code
+        * Ex: ` WHERE p.name = $actorName `
+    
 
 ## Other
 * Can assign variables to path or multiple paths
