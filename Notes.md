@@ -90,7 +90,122 @@
         * Removes a node and all of its relationships from the graph
         * Ex: ` MATCH (p:Person {name:'Tom Hanks'}) DETATCH DELETE p `
             * Removes all the relationships of Person *p* then deletes the node
-    
+## Importing Data (sorted by speed, slow->fast)
+* **LOAD CSV**
+    * CSV
+    * Special handling needed for >1000k rows
+        * use ` :auto USING PERIODIC COMMIT LOAD CSV ` to create import data batch sizes
+        * Can't use 
+            * `collect()`
+            * `count()`
+            * `ORDER BY`
+            * `DISTINCT`
+    * Server Online
+    * General Step: 
+        1) Determine how the CSV file will be structured.
+        2) Determine if normalized or denormalized data.
+        3) Ensure IDs to be used in the data are unique.
+        4) Ensure data in CSV files is “clean”.
+        5) Execute Cypher code to inspect the data.
+        6) Determine if data needs to be transformed.
+        7) Ensure constraints are created in the graph.
+        8) Determine the size of the data to be loaded.
+        9) Execute Cypher code to load the data.
+        10) Add indexes to the graph.
+    * Import CSV Ex: 
+        * Create Constraints: 
+            ```
+            CREATE CONSTRAINT UniqueMovieIdConstraint ON (m:Movie) ASSERT m.id IS UNIQUE; 
+            CREATE CONSTRAINT UniquePersonIdConstraint ON (p:Person) ASSERT p.id IS UNIQUE
+            ```
+        * Import Nodes: 
+            ```
+            :auto USING PERIODIC COMMIT 500 LOAD CSV WITH HEADERS FROM 'https://data.neo4j.com/v4.0-intro-neo4j/movies1.csv' as row
+            MERGE (m:Movie {id:toInteger(row.movieId)})
+            ON CREATE SET
+              m.title = row.title,
+              m.avgVote = toFloat(row.avgVote),
+              m.releaseYear = toInteger(row.releaseYear),
+              m.genres = split(row.genres,":")
+            ```
+         * Import Relationships:
+            ```
+            LOAD CSV WITH HEADERS FROM 'https://data.neo4j.com/v4.0-intro-neo4j/directors.csv' AS row
+            MATCH (movie:Movie {id:toInteger(row.movieId)})
+            MATCH (person:Person {id: toInteger(row.personId)})
+            MERGE (person)-[:DIRECTED]->(movie)
+            ON CREATE SET person:Director
+            ```
+         * Create Index Ex: 
+            ```
+            CREATE INDEX MovieTitleIndex ON (m:Movie) FOR (m.title)
+            CREATE INDEX PersonNameIndex ON (p:Person) FOR (pname)
+            ```
+* **APOC**
+    * CSV, XML, or JSON
+    * No size limit
+    * Server Online
+    * Functions
+        * `apoc.periodic.iterate()`
+            * Sets batch sizes for data to be imported
+        * `apoc.load.csv()`
+            * Loads the RDBMS CSV/s
+        * `apoc.do.when()`
+            * Conditional programing 
+        * `apoc.load.json()`
+            * Loads JSON instead of CSV
+    * CSV Ex:
+        ```
+        CALL apoc.periodic.iterate(
+            "CALL apoc.load.csv('https://data.neo4j.com/v4.0-intro-neo4j/movies2.csv' )
+            YIELD map AS row RETURN row",
+            "WITH row.movieId as movieId, row.title AS title, row.genres AS genres,
+                toInteger(row.releaseYear) AS releaseYear, toFloat(row.avgVote) AS avgVote,
+                collect({id: row.personId, name:row.name, born: toInteger(row.birthYear),
+                died: toInteger(row.deathYear),personType: row.personType,
+                roles: split(coalesce(row.characters,''),':')}) AS people
+            MERGE (m:Movie {id:movieId})
+                ON CREATE SET m.title=title, m.avgVote=avgVote, m.releaseYear=releaseYear, m.genres=split(genres,':')
+            WITH *
+            UNWIND people AS person
+            MERGE (p:Person {id: person.id})
+                ON CREATE SET p.name = person.name, p.born = person.born, p.died = person.died
+            WITH  m, person, p
+            CALL apoc.do.when(person.personType = 'ACTOR',
+                'MERGE (p)-[:ACTED_IN {roles: person.roles}]->(m)
+                    ON CREATE SET p:Actor',
+                'MERGE (p)-[:DIRECTED]->(m)
+                    ON CREATE SET p:Director', {m:m, p:p, person:person}) 
+            YIELD value AS value
+            RETURN count(*)  ",
+        {batchSize: 500})
+        ```
+    * JSON Ex: 
+        ```
+        WITH "https://api.stackexchange.com/2.2/search?page=1&pagesize=5&order=asc&sort=creation&tagged=neo4j&site=stackoverflow&filter=!5-i6Zw8Y)4W7vpy91PMYsKM-k9yzEsSC1_Uxlf" AS url
+        CALL apoc.load.json(url)
+        YIELD value AS data
+        UNWIND data.items as q
+        MERGE (question:Question {id: q.question_id})
+          ON CREATE SET  question.title = q.title,
+                         question.tags = q.tags,
+                         question.is_answered = q.is_answered
+        MERGE (user:User {name: q.owner.display_name})
+        MERGE (user)-[:ANSWERED]->(question)
+        ```
+* **ETF Tool**
+    * Live RDBMS
+    * No size limit
+    * Server Online
+* **neo4j-admin import tools**
+    * CSV (special format)
+    * No size limit
+    * Server Offline
+* Other Notes
+    * Normalized vs Denormalized
+        * Normalizd: CSVs for each relational table
+        * Denormalized: One massive CSV
+
 ## Constraints
 * Types 
     * Uniqueness
@@ -289,6 +404,9 @@
         * Returns all lower-case / upper-case version of given string
         * Ex: ` MATCH (p:Person)-[:WROTE]->(:Movie) RETURN toLower(p.name) `
             * Returns the lower-case version of all the Person *p* which wrote a Movie *m*
+    * **split()**
+        * Splits a string based on a demlimiter (default: ',')
+        * Ex: ` RETURN split(<some string>) `
 * Aggregating  
     * **collect()**
         * Returns an aggregated list object of a given object
@@ -302,8 +420,13 @@
         * Returns # of given object type
         * Ex: ` MATCH (p:Person)-[:ACTED_IN]->(m:Movie)<-[:DIRECTED]-(p)  RETURN count(m) `
             * Returns the # of the Movie *m* which a Person *p* both acted and directed
+    * **coalesce()**
+        * Replaces null values with a given value
+        * Ex: ` RETURN split(coalesce(line.genres,"") `
+            * Replaces the null values in *lines.genres* with "" the splits them
 * Conversion
     * **toInteger()**
+    * **toFloat()**
     * **toString()**
 * Time
     * **date()**
@@ -327,8 +450,16 @@
 * Clear all parameters
     * ` :params {} `
 * Check on all queries being performed
-    * ` :queries ` \ ` dbms.listQueries() `
-
+    * ` :queries ` 
+    * ` dbms.listQueries() `
+* Remove everything
+     * (using APOC)
+     ```
+     // Delete all constraints and indexes
+     CALL apoc.schema.assert({},{},true);
+     // Delete all nodes and relationships
+     CALL apoc.periodic.iterate('MATCH (n) RETURN n','DETACH DELETE n', { batchSize:500 })
+     
 ## Types
 * Property
     * Number
